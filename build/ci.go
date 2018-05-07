@@ -771,6 +771,7 @@ func doAndroidArchive(cmdline []string) {
 		}
 		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
 			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
+			"-Dgpg.keyname=" + os.Getenv("ANDROID_SIGNING_KEY_ID"),
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
 	}
 }
