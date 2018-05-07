@@ -754,16 +754,34 @@ func doAndroidArchive(cmdline []string) {
 	// Sign and upload all the artifacts to Maven Central
 	os.Rename(archive, meta.Package+".aar")
 	if *signer != "" && *deploy != "" {
+
+		importedKeyID := ""
+		
 		// Import the signing key into the local GPG instance
 		if b64key := os.Getenv(*signer); b64key != "" {
 			key, err := base64.StdEncoding.DecodeString(b64key)
 			if err != nil {
 				log.Fatalf("invalid base64 %s", *signer)
 			}
-			gpg := exec.Command("gpg", "--import")
+			gpg :=  exec.Command("gpg",  "--import-options", "import-show", "--with-colons", "--import")
 			gpg.Stdin = bytes.NewReader(key)
-			build.MustRun(gpg)
+			outputBuffer := new(bytes.Buffer)
+			gpg.Stdout = outputBuffer
+			
+			gpg.Run()
+
+			scanner := bufio.NewScanner(strings.NewReader(outputBuffer.String()))
+			for scanner.Scan() {
+			    if (strings.HasPrefix(scanner.Text(),"fpr")) {
+	       		       importedKeyID = strings.Trim(strings.TrimPrefix(scanner.Text(),"fpr"),":")
+			    }
+			}
+
 		}
+		if importedKeyID == "" {
+		   log.Fatalf("Could not get ID of imported ")
+		}
+		
 		// Upload the artifacts to Sonatype and/or Maven Central
 		repo := *deploy + "/service/local/staging/deploy/maven2"
 		if meta.Develop {
@@ -771,7 +789,7 @@ func doAndroidArchive(cmdline []string) {
 		}
 		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
 			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
-			"-Dgpg.keyname=" + os.Getenv("ANDROID_SIGNING_KEY_ID"),
+			"-Dgpg.keyname=" + importedKeyID,
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
 	}
 }
